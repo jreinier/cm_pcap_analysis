@@ -11,7 +11,7 @@
 
 <meta name="author" content="John Reinier" />
 
-<meta name="date" content="2023-03-09" />
+<meta name="date" content="2023-03-10" />
 
 <title>PCAP Sample Analysis</title>
 
@@ -358,7 +358,7 @@ display: none;
 
 <h1 class="title toc-ignore">PCAP Sample Analysis</h1>
 <h4 class="author">John Reinier</h4>
-<h4 class="date">2023-03-09</h4>
+<h4 class="date">2023-03-10</h4>
 
 </div>
 
@@ -599,10 +599,322 @@ above</h2>
 <div id="note-that-pcap.grts.design-contains-the-data-results-as-well-as-design-status-information" class="section level2">
 <h2>Note that pcap.grts.design contains the data results as well as
 design status information</h2>
-<pre class="r"><code>pcap.grts.design_data1 &lt;- dbGetQuery(conn, &#39;SELECT * FROM survey_designs.pcap_grts_data_first_sample ORDER by &quot;siteID&quot;&#39;)
-
-pcap.grts.design_data2 &lt;- dbGetQuery(conn, &#39;SELECT * FROM survey_designs.pcap_grts_data_second_sample ORDER by &quot;siteID&quot;&#39;)</code></pre>
 </div>
+</div>
+<div id="sample-1-analysis" class="section level1">
+<h1>SAMPLE 1 ANALYSIS</h1>
+<div id="do-estimates-for-fqai-and-other-metrics-of-interest" class="section level2">
+<h2>Do estimates for FQAI and other metrics of interest</h2>
+</div>
+<div id="select-which-sites-to-use---only-ts-target-sampled-sites" class="section level2">
+<h2>select which sites to use - only TS-target sampled sites</h2>
+</div>
+<div id="set-up-sites-subpop-dsgn-and-data-data-frames-for-estimation-functions" class="section level2">
+<h2>Set up sites, subpop, dsgn, and data data frames for estimation
+functions</h2>
+</div>
+<div id="sites-identifies-which-sites-to-use-in-estimation" class="section level2">
+<h2>sites identifies which sites to use in estimation</h2>
+</div>
+<div id="sites-must-have-siteid-and-column-indicating-if-site-will-be-used" class="section level2">
+<h2>sites must have siteID and column indicating if site will be
+used</h2>
+<pre class="r"><code>sites.1 &lt;- data.frame(siteID=pcap.grts.design_data1$siteID, 
+                    Use=pcap.grts.design_data1$EvalStatus==&#39;TS&#39;)
+
+sites.2 &lt;- data.frame(siteID=pcap.grts.design_data2$siteID, 
+                      Use=pcap.grts.design_data2$EvalStatus==&#39;TS&#39;)</code></pre>
+<pre class="r"><code>pcap.grts.design_data1 &lt;- transform(pcap.grts.design_data1, final.wt=as.numeric(final.wt))
+
+pcap.grts.design_data2 &lt;- transform(pcap.grts.design_data2, final.wt=as.numeric(final.wt))
+
+sapply(pcap.grts.design_data1, class)</code></pre>
+<pre><code>##                               id                             geom 
+##                        &quot;integer&quot;                      &quot;character&quot; 
+##                           siteID                           xcoord 
+##                      &quot;character&quot;                        &quot;numeric&quot; 
+##                           ycoord                           mdcaty 
+##                        &quot;numeric&quot;                      &quot;character&quot; 
+##                              wgt                          stratum 
+##                        &quot;numeric&quot;                      &quot;character&quot; 
+##                            panel                       EvalStatus 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                       EvalReason                              res 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                        res_abbrv                           MajMin 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                        Prim_Zone                           County 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                           Region                         Sec_Zone 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                        Longitude                         Latitude 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##                          Plot.ID                    Year.Assessed 
+##                        &quot;integer&quot;                      &quot;character&quot; 
+##                      LimDataPlt.                            Type1 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                            Type2                     PlotID.Olsen 
+##                      &quot;character&quot;                        &quot;integer&quot; 
+##                         final.wt                          vibi_fq 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##                 vibi_fq_no_trees               carex_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##          cyperaceae_metric_value               dicot_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##               shade_metric_value               shrub_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##          hydrophyte_metric_value                 svp_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##            ap_ratio_metric_value                       fqai_score 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##           bryophyte_metric_value  hydrophyte_rel_cov_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##      hydrophyte_rel_cov_no_trees   sensitive_rel_cov_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##       sensitive_rel_cov_no_trees    tolerant_rel_cov_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##        tolerant_rel_cov_no_trees invasive_graminoids_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##          small_tree_metric_value                     subcanopy_iv 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##                        canopy_iv                group_description 
+##                        &quot;numeric&quot;                      &quot;character&quot; 
+##                 pcap_description 
+##                      &quot;character&quot;</code></pre>
+<pre class="r"><code>sapply(pcap.grts.design_data2, class)</code></pre>
+<pre><code>##                               id                             geom 
+##                        &quot;integer&quot;                      &quot;character&quot; 
+##                           siteID                           xcoord 
+##                      &quot;character&quot;                        &quot;numeric&quot; 
+##                           ycoord                           mdcaty 
+##                        &quot;numeric&quot;                      &quot;character&quot; 
+##                              wgt                          stratum 
+##                        &quot;numeric&quot;                      &quot;character&quot; 
+##                            panel                       EvalStatus 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                       EvalReason                              res 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                        res_abbrv                           MajMin 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                        Prim_Zone                           County 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                           Region                         Sec_Zone 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                        Longitude                         Latitude 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##                          Plot.ID                    Year.Assessed 
+##                        &quot;integer&quot;                      &quot;character&quot; 
+##                      LimDataPlt.                            Type1 
+##                      &quot;character&quot;                      &quot;character&quot; 
+##                            Type2                     PlotID.Olsen 
+##                      &quot;character&quot;                        &quot;integer&quot; 
+##                         final.wt                          vibi_fq 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##                 vibi_fq_no_trees               carex_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##          cyperaceae_metric_value               dicot_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##               shade_metric_value               shrub_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##          hydrophyte_metric_value                 svp_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##            ap_ratio_metric_value                       fqai_score 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##           bryophyte_metric_value  hydrophyte_rel_cov_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##      hydrophyte_rel_cov_no_trees   sensitive_rel_cov_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##       sensitive_rel_cov_no_trees    tolerant_rel_cov_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##        tolerant_rel_cov_no_trees invasive_graminoids_metric_value 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##          small_tree_metric_value                     subcanopy_iv 
+##                        &quot;numeric&quot;                        &quot;numeric&quot; 
+##                        canopy_iv                group_description 
+##                        &quot;numeric&quot;                      &quot;character&quot; 
+##                 pcap_description 
+##                      &quot;character&quot;</code></pre>
+</div>
+</div>
+<div id="specify-design-information" class="section level1">
+<h1>Specify design information</h1>
+<pre class="r"><code>dsgn.1 &lt;- data.frame(siteID=pcap.grts.design_data1$siteID,
+                   stratum=pcap.grts.design_data1$stratum, 
+                   wgt=pcap.grts.design_data1$final.wt,
+                   xcoord=pcap.grts.design_data1$xcoord,
+                   ycoord=pcap.grts.design_data1$ycoord)
+
+dsgn.2 &lt;- data.frame(siteID=pcap.grts.design_data2$siteID,
+                     stratum=pcap.grts.design_data2$stratum, 
+                     wgt=pcap.grts.design_data2$final.wt,
+                     xcoord=pcap.grts.design_data2$xcoord,
+                     ycoord=pcap.grts.design_data2$ycoord)</code></pre>
+</div>
+<div id="analysis-of-continuous-variables" class="section level1">
+<h1>Analysis of continuous variables</h1>
+<pre class="r"><code>ScoresSum.all.1 &lt;- cont_analysis(
+  pcap.grts.design_data1, 
+  vars = c(&quot;fqai_score&quot;, &quot;sensitive_rel_cov_metric_value&quot;, &quot;tolerant_rel_cov_metric_value&quot;, &quot;subcanopy_iv&quot;, &quot;canopy_iv&quot;), 
+  subpop=NULL, 
+  weight = &quot;final.wt&quot;,                            
+  xcoord = &quot;xcoord&quot;, 
+  ycoord = &quot;ycoord&quot;, 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype=&#39;Local&#39;)
+
+ScoresSum.subpop.1 &lt;- cont_analysis(
+  pcap.grts.design_data1, 
+  vars = c(&quot;fqai_score&quot;, &quot;sensitive_rel_cov_metric_value&quot;, &quot;tolerant_rel_cov_metric_value&quot;, &quot;subcanopy_iv&quot;, &quot;canopy_iv&quot;), 
+  subpops = c(&quot;mdcaty&quot;, &quot;group_description&quot;), 
+  weight = &quot;final.wt&quot;, 
+  xcoord = &quot;xcoord&quot;, 
+  ycoord = &quot;ycoord&quot;, 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype=&#39;Local&#39;)</code></pre>
+<pre><code>## During execution of the program, 20 warning messages were generated.  The warning 
+## messages are stored in a data frame named &#39;warn_df&#39;.  Enter the following 
+## command to view the warning messages: warnprnt() 
+## To view a subset of the warning messages (say, messages number 1, 3, and 5), 
+## enter the following command: warnprnt(m=c(1,3,5))</code></pre>
+<pre class="r"><code>ScoresSum.all.2 &lt;- cont_analysis(
+  pcap.grts.design_data2, 
+  vars = c(&quot;fqai_score&quot;, &quot;sensitive_rel_cov_metric_value&quot;, &quot;tolerant_rel_cov_metric_value&quot;, &quot;subcanopy_iv&quot;, &quot;canopy_iv&quot;), 
+  subpop=NULL, 
+  weight = &quot;final.wt&quot;,                            
+  xcoord = &quot;xcoord&quot;, 
+  ycoord = &quot;ycoord&quot;, 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype=&#39;Local&#39;)
+
+ScoresSum.subpop.2 &lt;- cont_analysis(
+  pcap.grts.design_data2, 
+  vars = c(&quot;fqai_score&quot;, &quot;sensitive_rel_cov_metric_value&quot;, &quot;tolerant_rel_cov_metric_value&quot;, &quot;subcanopy_iv&quot;, &quot;canopy_iv&quot;), 
+  subpops = c(&quot;mdcaty&quot;, &quot;group_description&quot;), 
+  weight = &quot;final.wt&quot;, 
+  xcoord = &quot;xcoord&quot;, 
+  ycoord = &quot;ycoord&quot;, 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype=&#39;Local&#39;)</code></pre>
+<pre><code>## During execution of the program, 20 warning messages were generated.  The warning 
+## messages are stored in a data frame named &#39;warn_df&#39;.  Enter the following 
+## command to view the warning messages: warnprnt() 
+## To view a subset of the warning messages (say, messages number 1, 3, and 5), 
+## enter the following command: warnprnt(m=c(1,3,5))</code></pre>
+</div>
+<div id="can-use-r-to-plot-cdf-estimates-using-function-cdfplot.fcn" class="section level1">
+<h1>Can use R to Plot CDF estimates using function: cdfplot.fcn</h1>
+</div>
+<div id="file-cdfplot.fcn.r" class="section level1">
+<h1>File: cdfplot.fcn.r</h1>
+</div>
+<div id="programmer-tony-olsen" class="section level1">
+<h1>Programmer: Tony Olsen</h1>
+</div>
+<div id="date-sept-23-2002" class="section level1">
+<h1>Date: Sept 23, 2002</h1>
+</div>
+<div id="input" class="section level1">
+<h1>Input:</h1>
+</div>
+<div id="cdfest---dataframe-with" class="section level1">
+<h1>cdfest - dataframe with</h1>
+</div>
+<div id="x-value-for-cdf-plot" class="section level1">
+<h1>x-value for cdf plot</h1>
+</div>
+<div id="y-value-cdf-estimate" class="section level1">
+<h1>y-value (cdf estimate)</h1>
+</div>
+<div id="lower-confidence-bound" class="section level1">
+<h1>lower confidence bound</h1>
+</div>
+<div id="upper-confidence-bound" class="section level1">
+<h1>upper confidence bound</h1>
+</div>
+<div id="section" class="section level1">
+<h1></h1>
+</div>
+<div id="output" class="section level1">
+<h1>Output:</h1>
+</div>
+<div id="plot-of-cdf-with-confidence-bounds" class="section level1">
+<h1>plot of cdf with confidence bounds</h1>
+<pre class="r"><code>cdfplot.fcn &lt;- function(cdfest,prop=T,...){
+  
+  if(prop == T) {
+    plot(cdfest[,1],cdfest[,2]  ,
+         type=&#39;l&#39;,ylim=c(0,100),...)
+    tvalue &lt;- cdfest[,2]&gt;=5 &amp; cdfest[,2]&lt;=95
+  }
+  else {
+    plot(cdfest[,1],cdfest[,2],type=&#39;l&#39;,...)
+    tvalue &lt;- cdfest[,2]&gt;=0.05*max(cdfest[,2]) &amp; 
+      cdfest[,2]&lt;=0.95*max(cdfest[,2])
+  }
+  value &lt;- cdfest[,1][tvalue]
+  upper &lt;- cdfest[,4][tvalue]
+  lower &lt;- cdfest[,3][tvalue]
+  lines(value,lower,lty=2)
+  lines(value,upper,lty=2)
+  
+  legend(x=min(cdfest[,1]),y=max(cdfest[,2]),
+         legend=c(&#39;CDF estimate&#39;,&#39;95% Confidence Limits&#39;),
+         lty=c(1,2), bty=&#39;n&#39;, cex=.7)
+}</code></pre>
+</div>
+<div id="all-sites-cdf-estimates" class="section level1">
+<h1>All sites CDF estimates</h1>
+</div>
+<div id="first-sample" class="section level1">
+<h1>First Sample</h1>
+<pre class="r"><code>tsttype.all.1 &lt;- ScoresSum.all.1$CDF$Subpopulation==&#39;All Sites&#39;</code></pre>
+</div>
+<div id="plot-fqai-score-cdfs-for-percent-and-area" class="section level1">
+<h1>Plot FQAI Score CDFs for percent and area</h1>
+<pre class="r"><code>tst.all.1 &lt;- tsttype.all.1 &amp; ScoresSum.all.1$CDF$Indicator==&#39;fqai_score&#39;
+cdf.all.1 &lt;- ScoresSum.all.1$CDF[tst.all.1,c(&#39;Value&#39;,&#39;Estimate.P&#39;,&#39;LCB95Pct.P&#39;,&#39;UCB95Pct.P&#39;)]
+xlab &lt;- &#39;FQAI Score&#39;
+ylab &lt;- &#39;Percent&#39;
+cdfplot.fcn(cdf.all.1,prop=T,xlab=xlab,ylab=ylab)
+title(&#39;FQAI - All Sites - First Sample&#39;)
+segments(x0 = 19.7, y0 = 0, x1 = 19.7, y1 = 56.5,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+segments(x0 = 0, y0 = 56.5, x1 = 19.7, y1 = 56.5,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+
+segments(x0 = 23.5, y0 = 0, x1 = 23.5, y1 = 77.5,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+segments(x0 = 0, y0 = 77.5, x1 = 23.5, y1 = 77.5,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+segments(x0 = 27.3, y0 = 0, x1 = 27.3, y1 = 91.3,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+segments(x0 = 0, y0 = 91.3, x1 = 27.3, y1 = 91.3,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+segments(x0 = 31.1, y0 = 0, x1 = 31.1, y1 = 97.9,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)
+segments(x0 = 0, y0 = 97.9, x1 = 31.1, y1 = 97.9,
+         col = &quot;red&quot;,
+         lwd = 3,
+         lty = &quot;dotted&quot;)</code></pre>
+<p><img src="data:image/png;base64,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" width="672" /></p>
 <div id="r-markdown" class="section level2">
 <h2>R Markdown</h2>
 <p>This is an R Markdown document. Markdown is a simple formatting
