@@ -804,45 +804,44 @@ ScoresSum.subpop.2 &lt;- cont_analysis(
 ## command to view the warning messages: warnprnt() 
 ## To view a subset of the warning messages (say, messages number 1, 3, and 5), 
 ## enter the following command: warnprnt(m=c(1,3,5))</code></pre>
+<div id="can-use-r-to-plot-cdf-estimates-using-function-cdfplot.fcn" class="section level3">
+<h3>Can use R to Plot CDF estimates using function: cdfplot.fcn</h3>
 </div>
-<div id="can-use-r-to-plot-cdf-estimates-using-function-cdfplot.fcn" class="section level1">
-<h1>Can use R to Plot CDF estimates using function: cdfplot.fcn</h1>
+<div id="file-cdfplot.fcn.r" class="section level3">
+<h3>File: cdfplot.fcn.r</h3>
 </div>
-<div id="file-cdfplot.fcn.r" class="section level1">
-<h1>File: cdfplot.fcn.r</h1>
+<div id="programmer-tony-olsen" class="section level3">
+<h3>Programmer: Tony Olsen</h3>
 </div>
-<div id="programmer-tony-olsen" class="section level1">
-<h1>Programmer: Tony Olsen</h1>
+<div id="date-sept-23-2002" class="section level3">
+<h3>Date: Sept 23, 2002</h3>
 </div>
-<div id="date-sept-23-2002" class="section level1">
-<h1>Date: Sept 23, 2002</h1>
+<div id="input" class="section level3">
+<h3>Input:</h3>
 </div>
-<div id="input" class="section level1">
-<h1>Input:</h1>
+<div id="cdfest---dataframe-with" class="section level3">
+<h3>cdfest - dataframe with</h3>
 </div>
-<div id="cdfest---dataframe-with" class="section level1">
-<h1>cdfest - dataframe with</h1>
+<div id="x-value-for-cdf-plot" class="section level3">
+<h3>x-value for cdf plot</h3>
 </div>
-<div id="x-value-for-cdf-plot" class="section level1">
-<h1>x-value for cdf plot</h1>
+<div id="y-value-cdf-estimate" class="section level3">
+<h3>y-value (cdf estimate)</h3>
 </div>
-<div id="y-value-cdf-estimate" class="section level1">
-<h1>y-value (cdf estimate)</h1>
+<div id="lower-confidence-bound" class="section level3">
+<h3>lower confidence bound</h3>
 </div>
-<div id="lower-confidence-bound" class="section level1">
-<h1>lower confidence bound</h1>
+<div id="upper-confidence-bound" class="section level3">
+<h3>upper confidence bound</h3>
 </div>
-<div id="upper-confidence-bound" class="section level1">
-<h1>upper confidence bound</h1>
+<div id="section" class="section level3">
+<h3></h3>
 </div>
-<div id="section" class="section level1">
-<h1></h1>
+<div id="output" class="section level3">
+<h3>Output:</h3>
 </div>
-<div id="output" class="section level1">
-<h1>Output:</h1>
-</div>
-<div id="plot-of-cdf-with-confidence-bounds" class="section level1">
-<h1>plot of cdf with confidence bounds</h1>
+<div id="plot-of-cdf-with-confidence-bounds" class="section level3">
+<h3>plot of cdf with confidence bounds</h3>
 <pre class="r"><code>cdfplot.fcn &lt;- function(cdfest,prop=T,...){
   
   if(prop == T) {
@@ -865,6 +864,7 @@ ScoresSum.subpop.2 &lt;- cont_analysis(
          legend=c(&#39;CDF estimate&#39;,&#39;95% Confidence Limits&#39;),
          lty=c(1,2), bty=&#39;n&#39;, cex=.7)
 }</code></pre>
+</div>
 </div>
 <div id="all-sites-cdf-estimates" class="section level1">
 <h1>All sites CDF estimates</h1>
