@@ -1,0 +1,483 @@
+---
+title: "PCAP Sample Analysis"
+author: "John Reinier"
+date: "`r Sys.Date()`"
+knit: (function(input_file, encoding) {
+    out_dir <- 'docs';
+    rmarkdown::render(input_file,
+      encoding=encoding,
+      output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r lib, include=FALSE}
+library(spsurvey)
+library(RPostgres)
+```
+
+```{r conn, include=FALSE}
+#open the connection
+dw <- config::get("datawarehouse")
+
+conn <- DBI::dbConnect(odbc::odbc(),
+                      Driver = dw$driver,
+                      Server = dw$server,
+                      UID    = dw$uid,
+                      PWD    = dw$pwd,
+                      Port   = dw$port,
+                      Database = dw$database
+)
+```
+
+```{r ,include=TRUE}
+framearea <- c('Bedford_Reservation'=2272.3, 'Brecksville_Reservation'=3488.4, 'Hinckley_Reservation'=2819.3, 'Mill_Stream_Run_Reservation'=3185.0, 'North_Chagrin_Reservation'=2173.9, 'Rocky_River_Reservation'=2588.7, 'South_Chagrin_Reservation'=1529.9, 'MinorRes'=3243.1, 'Prim_Bedford'=10677.0, 'Prim_Brecksville'=6142.4, 'Prim_Hinkley'=11773.2, 'Prim_Mill_Stream_Run'=10289.1, 'Prim_North_Chagrin'=6893.9, 'Prim_Rocky_River'=8754.2, 'Prim_South_Chagrin'=7408.5, 'Prim_South_Chagrin'=7408.5, 'Prim_MinorRes'=35501.9, 'Secondary'=32019.3, 'Seven_County'=1730283, 'LEAP_Region'=6589114)
+```
+
+## Import design file
+
+```{r ,include=TRUE}
+pcap.grts.design <- dbGetQuery(conn, 'SELECT * FROM survey_designs."Cleveland_Parks_Region_Sites" ORDER by id')
+pcap.grts.design <- pcap.grts.design[c(-1,-2,-13,-22,-23,-24,-25,-26)]
+head(pcap.grts.design,50)
+```
+
+
+## What are the strata and panels present?
+
+```{r ,include=TRUE}
+table(pcap.grts.design$stratum)
+table(pcap.grts.design$panel)
+table(pcap.grts.design$mdcaty)
+```
+
+## Check codes for Sampling Status & not use NN if present
+
+```{r ,include=TRUE}
+table(pcap.grts.design$EvalStatus)
+tst <- pcap.grts.design$EvalStatus == 'NN'
+pcap.grts.design <- pcap.grts.design[!tst,]
+```
+
+<div class="warning" style='padding:0.1em; background-color:#E9D8FD; color:#69337A'>
+<span>
+<p style='margin-top:1em; text-align:center'>
+<b>Note on code meanings</b></p>
+<p style='margin-left:1em;'>
+TS - target and sampled site\
+NT - non-target (i.e., not natural vegetation) and not sampled (replaced)\
+NN - member of oversample and not needed (not evaluated)
+</p>
+</span>
+</div>
+
+
+## Adjust weights to match frame area
+## Determine which sites to include in weight adjustment
+
+```{r ,include=TRUE}
+sites <- rep(TRUE,nrow(pcap.grts.design))
+pcap.grts.design$final.wt <- adjwgt(pcap.grts.design$wgt,
+                                    pcap.grts.design$mdcaty, framearea, sites)
+```
+
+
+## Check out weights
+```{r ,include=TRUE}
+tapply(pcap.grts.design$final.wt, pcap.grts.design$EvalStatus, sum)
+```
+
+# Estimation
+
+##### Read in data files (pcap.grts.design) from weight adjustment process above
+
+```{r ,include=FALSE}
+pcap.grts.design_data1 <- dbGetQuery(conn, 'SELECT * FROM survey_designs.pcap_grts_data_first_sample ORDER by "siteID"')
+
+pcap.grts.design_data2 <- dbGetQuery(conn, 'SELECT * FROM survey_designs.pcap_grts_data_second_sample ORDER by "siteID"')
+```
+
+# SAMPLE 1 ANALYSIS
+
+##### Do estimates for FQAI and other metrics of interest
+##### select which sites to use - only TS-target sampled sites
+##### Set up sites, subpop, dsgn, and data data frames for estimation functions
+
+##### sites identifies which sites to use in estimation
+##### sites must have siteID and column indicating if site will be used
+
+```{r ,include=TRUE}
+sites.1 <- data.frame(siteID=pcap.grts.design_data1$siteID, 
+                    Use=pcap.grts.design_data1$EvalStatus=='TS')
+
+sites.2 <- data.frame(siteID=pcap.grts.design_data2$siteID, 
+                      Use=pcap.grts.design_data2$EvalStatus=='TS')
+```
+
+```{r ,include=TRUE}
+pcap.grts.design_data1 <- transform(pcap.grts.design_data1, final.wt=as.numeric(final.wt))
+
+pcap.grts.design_data2 <- transform(pcap.grts.design_data2, final.wt=as.numeric(final.wt))
+
+sapply(pcap.grts.design_data1, class)
+
+sapply(pcap.grts.design_data2, class)
+```
+
+## Specify design information
+
+```{r ,include=TRUE}
+dsgn.1 <- data.frame(siteID=pcap.grts.design_data1$siteID,
+                   stratum=pcap.grts.design_data1$stratum, 
+                   wgt=pcap.grts.design_data1$final.wt,
+                   xcoord=pcap.grts.design_data1$xcoord,
+                   ycoord=pcap.grts.design_data1$ycoord)
+
+dsgn.2 <- data.frame(siteID=pcap.grts.design_data2$siteID,
+                     stratum=pcap.grts.design_data2$stratum, 
+                     wgt=pcap.grts.design_data2$final.wt,
+                     xcoord=pcap.grts.design_data2$xcoord,
+                     ycoord=pcap.grts.design_data2$ycoord)
+```
+
+## Analysis of continuous variables
+
+```{r ,include=TRUE}
+ScoresSum.all.1 <- cont_analysis(
+  pcap.grts.design_data1, 
+  vars = c("fqai_score", "sensitive_rel_cov_metric_value", "tolerant_rel_cov_metric_value", "subcanopy_iv", "canopy_iv"), 
+  subpop=NULL, 
+  weight = "final.wt",                            
+  xcoord = "xcoord", 
+  ycoord = "ycoord", 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype='Local')
+
+ScoresSum.subpop.1 <- cont_analysis(
+  pcap.grts.design_data1, 
+  vars = c("fqai_score", "sensitive_rel_cov_metric_value", "tolerant_rel_cov_metric_value", "subcanopy_iv", "canopy_iv"), 
+  subpops = c("mdcaty", "group_description"), 
+  weight = "final.wt", 
+  xcoord = "xcoord", 
+  ycoord = "ycoord", 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype='Local')
+
+ScoresSum.all.2 <- cont_analysis(
+  pcap.grts.design_data2, 
+  vars = c("fqai_score", "sensitive_rel_cov_metric_value", "tolerant_rel_cov_metric_value", "subcanopy_iv", "canopy_iv"), 
+  subpop=NULL, 
+  weight = "final.wt",                            
+  xcoord = "xcoord", 
+  ycoord = "ycoord", 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype='Local')
+
+ScoresSum.subpop.2 <- cont_analysis(
+  pcap.grts.design_data2, 
+  vars = c("fqai_score", "sensitive_rel_cov_metric_value", "tolerant_rel_cov_metric_value", "subcanopy_iv", "canopy_iv"), 
+  subpops = c("mdcaty", "group_description"), 
+  weight = "final.wt", 
+  xcoord = "xcoord", 
+  ycoord = "ycoord", 
+  pctval=c(5, 10, 25, 50, 75, 90, 95),
+  conf=95,
+  vartype='Local')
+```
+
+<div class="warning" style='padding:0.1em; background-color:#E9D8FD; color:#69337A'>
+<span>
+<p style='margin-top:1em; text-align:center'>
+<b>Can use R to Plot CDF estimates using function: cdfplot.fcn</b></p>
+<p style='margin-left:1em;'>
+File: cdfplot.fcn.r\
+Programmer: Tony Olsen\
+Date: Sept 23, 2002\
+Input:\
+cdfest - dataframe with x-value for cdf plot, y-value (cdf estimate)\
+lower confidence bound\
+upper confidence bound\
+Output:\
+plot of cdf with confidence bounds
+</p>
+</span>
+</div>
+
+```{r ,include=TRUE}
+cdfplot.fcn <- function(cdfest,prop=T,...){
+  
+  if(prop == T) {
+    plot(cdfest[,1],cdfest[,2]  ,
+         type='l',ylim=c(0,100),...)
+    tvalue <- cdfest[,2]>=5 & cdfest[,2]<=95
+  }
+  else {
+    plot(cdfest[,1],cdfest[,2],type='l',...)
+    tvalue <- cdfest[,2]>=0.05*max(cdfest[,2]) & 
+      cdfest[,2]<=0.95*max(cdfest[,2])
+  }
+  value <- cdfest[,1][tvalue]
+  upper <- cdfest[,4][tvalue]
+  lower <- cdfest[,3][tvalue]
+  lines(value,lower,lty=2)
+  lines(value,upper,lty=2)
+  
+  legend(x=min(cdfest[,1]),y=max(cdfest[,2]),
+         legend=c('CDF estimate','95% Confidence Limits'),
+         lty=c(1,2), bty='n', cex=.7)
+}
+```
+## All sites CDF estimates
+
+```{r ,include=TRUE}
+tsttype.all.1 <- ScoresSum.all.1$CDF$Subpopulation=='All Sites'
+tsttype.all.2 <- ScoresSum.all.2$CDF$Subpopulation=='All Sites'
+```
+
+## Plot FQAI Score CDFs
+
+```{r ,include=TRUE}
+par(mfrow = c(2, 2))
+
+tst.all.1 <- tsttype.all.1 & ScoresSum.all.1$CDF$Indicator=='fqai_score'
+cdf.all.1 <- ScoresSum.all.1$CDF[tst.all.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.all.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - All Sites - First Sample')
+segments(x0 = 19.7, y0 = 0, x1 = 19.7, y1 = 56.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 56.5, x1 = 19.7, y1 = 56.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 23.5, y0 = 0, x1 = 23.5, y1 = 77.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 77.5, x1 = 23.5, y1 = 77.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 27.3, y0 = 0, x1 = 27.3, y1 = 91.3,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 91.3, x1 = 27.3, y1 = 91.3,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 31.1, y0 = 0, x1 = 31.1, y1 = 97.9,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 97.9, x1 = 31.1, y1 = 97.9,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+
+
+tst.all.2 <- tsttype.all.2 & ScoresSum.all.2$CDF$Indicator=='fqai_score'
+cdf.all.2 <- ScoresSum.all.2$CDF[tst.all.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.all.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - All Sites - Second Sample')
+segments(x0 = 19.7, y0 = 0, x1 = 19.7, y1 = 56.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 56.5, x1 = 19.7, y1 = 56.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 23.5, y0 = 0, x1 = 23.5, y1 = 77.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 77.5, x1 = 23.5, y1 = 77.5,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 27.3, y0 = 0, x1 = 27.3, y1 = 91.3,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 91.3, x1 = 27.3, y1 = 91.3,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 31.1, y0 = 0, x1 = 31.1, y1 = 97.9,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+segments(x0 = 0, y0 = 97.9, x1 = 31.1, y1 = 97.9,
+         col = "red",
+         lwd = 3,
+         lty = "dotted")
+```
+
+## Reservation Category cdf estimates
+
+```{r ,include=TRUE}
+par(mfrow = c(2, 2))
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='Bedford_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI Score - Bedford Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='Bedford_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI Score - Bedford Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='Brecksville_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Brecksville Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='Brecksville_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI Score - Brecksville Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='Hinckley_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Hinckley Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='Hinckley_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI Score - Hinckley Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='Mill_Stream_Run_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Mill Stream Run Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='Mill_Stream_Run_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI Score - Mill Stream Run Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='North_Chagrin_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - North Chagrin Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='North_Chagrin_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - North Chagrin Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='Rocky_River_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Rocky River Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='Rocky_River_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Rocky River Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='South_Chagrin_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - South Chagrin Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='South_Chagrin_Reservation'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - South Chagrin Sample 2')
+
+tsttype.subpop.1 <- ScoresSum.subpop.1$CDF$Subpopulation=='MinorRes'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.1 <- tsttype.subpop.1 & ScoresSum.subpop.1$CDF$Indicator=='fqai_score'
+cdf.subpop.1 <- ScoresSum.subpop.1$CDF[tst.subpop.1,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.1,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Minor Res Sample 1')
+
+tsttype.subpop.2 <- ScoresSum.subpop.2$CDF$Subpopulation=='MinorRes'
+# Plot FQAI Score CDFs for percent and area
+tst.subpop.2 <- tsttype.subpop.2 & ScoresSum.subpop.2$CDF$Indicator=='fqai_score'
+cdf.subpop.2 <- ScoresSum.subpop.2$CDF[tst.subpop.2,c('Value','Estimate.P','LCB95Pct.P','UCB95Pct.P')]
+xlab <- 'FQAI Score'
+ylab <- 'Percent'
+cdfplot.fcn(cdf.subpop.2,prop=T,xlab=xlab,ylab=ylab)
+title('FQAI - Minor Res Sample 2')
+```
+
+
